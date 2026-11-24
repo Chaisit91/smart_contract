@@ -1,0 +1,52 @@
+{
+  "_format": "hh3-sol-build-info-1",
+  "id": "solc-0_8_34-5231c5140d3cb92fb27d4e55995236c96498e2df",
+  "solcVersion": "0.8.34",
+  "solcLongVersion": "0.8.34+commit.80d5c536",
+  "compilerType": "solc",
+  "toolVersions": {
+    "hardhat": "3.21.2"
+  },
+  "userSourceNameMap": {
+    "contracts/MyAuction.sol": "project/contracts/MyAuction.sol"
+  },
+  "input": {
+    "language": "Solidity",
+    "settings": {
+      "evmVersion": "osaka",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "outputSelection": {
+        "*": {
+          "": [
+            "ast"
+          ],
+          "*": [
+            "abi",
+            "evm.bytecode.linkReferences",
+            "evm.bytecode.object",
+            "evm.bytecode.opcodes",
+            "evm.bytecode.sourceMap",
+            "evm.deployedBytecode.immutableReferences",
+            "evm.deployedBytecode.linkReferences",
+            "evm.deployedBytecode.object",
+            "evm.deployedBytecode.opcodes",
+            "evm.deployedBytecode.sourceMap",
+            "evm.methodIdentifiers"
+          ]
+        }
+      },
+      "remappings": []
+    },
+    "sources": {
+      "project/contracts/Auction.sol": {
+        "content": "// SPDX-License-Identifier: UNLICENSED\r\npragma solidity >=0.8.0 < 0.9.0;\r\n\r\nabstract contract Auction {\r\n    // เจ้าของ\r\n    address payable public owner;\r\n    // รายละเอียดสินค้า\r\n    struct Product {\r\n        string Brand;\r\n        string SerialNumber;\r\n    }\r\n\r\n    // สถานะการประมูล\r\n    enum AuctionState { STARTED, ENDED, CANCELLED }\r\n\r\n    // client functions\r\n\r\n    // ยื่นประมูล | ส่งเงินมาด้วย\r\n    function bid() virtual external payable;\r\n    // ดูยอดเงินที่ผู้ประมูลของตัวเองและผู้อื่น\r\n    function getMyBid(address bidder) virtual external view returns(uint256);\r\n\r\n    // owner functions\r\n\r\n    // จบการประมูล\r\n    function endAuction() virtual external;\r\n    // ยกเลิกการประมูล\r\n    function cancelAuction() virtual external;\r\n\r\n    // shared functions\r\n\r\n    // ถอนเงิน\r\n    function withdraw() virtual external;\r\n    // ดูรายละเอียดสินค้า\r\n    function getProductInfo() virtual external view returns(string memory, string memory);\r\n\r\n    // events\r\n\r\n    // มีการประมูล\r\n    event BidEvent(address bidder, uint256 amount, uint256 timestamp);\r\n    // จบประมูล\r\n    event EndedEvent(string message, uint256 timestamp);\r\n    // ยกเลิกประมูล\r\n    event CancelledEvent(string message, uint256 timestamp);\r\n    // มีการถอนเงิน\r\n    event WithdrawnEvent(address withdrawer, uint256 amount, uint256 timestamp);\r\n}"
+      },
+      "project/contracts/MyAuction.sol": {
+        "content": "// SPDX-License-Identifier: UNLICENSED\r\npragma solidity >=0.8.0 < 0.9.0;\r\n\r\nimport \"./Auction.sol\";\r\ncontract MyAuction is Auction {\r\n    Product public product;\r\n    AuctionState public STATE;\r\n    uint256 public endTime;\r\n    uint256 public highestBid;\r\n    address public highestBidder; //ผู้ประมูลคนที่มีราคาสูงสุด\r\n    address[] public bidders; //เก็บ address ของผู้ประมูลทั้งหมด\r\n\r\n    mapping(address => uint256) public bids; //เก็บยอดเงินที่ผู้ประมูลแต่ละคนประมูลไว้\r\n\r\n    modifier onlyOwner() { //สิ่งที่ทำงานก่อนที่ function ทำงานจะทำการตรวจสอบว่า msg.sender เป็น owner หรือไม่ ถ้าใช่ก็จะทำงานต่อไป แต่ถ้าไม่ใช่จะ revert\r\n        require(msg.sender == owner, \"Only owner can call this function\"); //require เป็นการตรวจสอบเงื่อนไข ถ้าเงื่อนไขเป็นจริงจะทำงานต่อไป แต่ถ้าเป็นเท็จจะ revert และแสดงข้อความที่กำหนด\r\n        _; //  _  คือ ให้ function ทำงานต่อไป\r\n    }\r\n\r\n    modifier notAnOwner() {\r\n        require(msg.sender != owner, \"Owner cannot call this function\");\r\n        _; //ก่อน function ทำงานจะทำการตรวจสอบว่า msg.sender ไม่ใช่ owner ถ้าไม่ใช่ก็จะทำงานต่อไป แต่ถ้าเป็น owner จะ revert\r\n    }\r\n\r\n    modifier onGoingAuction() { //เช็คว่าการประมูลยังดำเนินอยู่หรือไม่ ถ้า STATE เป็น AuctionState.STARTED จะทำงานต่อไป แต่ถ้าไม่ใช่จะ revert\r\n        require(STATE == AuctionState.STARTED, \"Auction is stopped\");\r\n        _;\r\n    }\r\n\r\n    constructor(\r\n        string memory _brand,\r\n        string memory _serialNumber,\r\n        uint256 _duration\r\n    ) {\r\n        owner = payable(msg.sender);\r\n        product = Product(_brand, _serialNumber);\r\n        STATE = AuctionState.STARTED;\r\n        // endTime = block.timestamp + _duration * 1 minutes;\r\n        endTime = block.timestamp + _duration * 1 seconds; //block.timestamp คือเวลาปัจจุบันของบล็อกที่กำลังทำงานอยู่ 1 seconds คือ 1 วินาที **ออกสอบ**\r\n    } //msg.senderคือคนที่เรียกใช้ฟังก์ชัน constructor  คือเจ้าของ\r\n\r\n    function bid() external payable override notAnOwner onGoingAuction {\r\n        require(\r\n            msg.value + bids[msg.sender] > highestBid,\r\n            \"Bid must be higher than current highest bid\"\r\n        ); //msg.value คือจำนวนเงินที่ผู้ประมูลส่งเข้ามา\r\n        require(\r\n            msg.sender != highestBidder,\r\n            \"You are already the highest bidder\"\r\n        ); //ตรวจสอบว่า msg.sender ไม่ใช่ highestBidder ถ้าใช่จะ revert\r\n        highestBidder = msg.sender;\r\n        if (bids[msg.sender] == 0) { //มีใครประมูลแล้วหรือยัง ถ้า bids[msg.sender] == 0 แสดงว่ายังไม่มีใครประมูลเลย\r\n            bidders.push(msg.sender); //เก็บ address ของผู้ประมูลทั้งหมด\r\n        }\r\n        bids[msg.sender] += msg.value;\r\n        highestBid = bids[msg.sender]; //เก็บยอดเงินที่ผู้ประมูลแต่ละคนประมูลไว้\r\n        emit BidEvent(msg.sender, bids[msg.sender], block.timestamp); //เชื่อมต่อภายนอกกับภายใน smart contract โดยการส่ง event ไปยังภายนอก\r\n    } //external เสียค่า gas น้อยกว่า\r\n\r\n    //ดูยอดเงินที่ประมูลของตัวเองละผู้อื่น\r\n    function getMyBid(address bidder) external view override returns (uint256) { //returns (uint256) คือฟังก์ชันนี้จะคืนค่าเป็น uint256 unsigned integer 256 bit = 32 byte\r\n        return bids[bidder]; //return ยอดเงินที่ผู้ประมูลแต่ละคนประมูลไว้\r\n    }\r\n\r\n    //owner fuctions\r\n    //จบการประมูลและยกเลิกการประมูล\r\n    function endAuction() external override onlyOwner onGoingAuction {\r\n        STATE = AuctionState.ENDED; //เปลี่ยนสถานะการประมูลเป็นจบการประมูล\r\n        emit EndedEvent(\"Auction has ended\", block.timestamp); //เชื่อมต่อภายนอกกับภายใน smart contract โดยการส่ง event ไปยังภายนอก\r\n    } // ฟังชั่นไหนที่เจ้าของเรียกใช้จะต้องเป็นเจ้าของเท่านั้น  onlyOwner คือ modifier ที่กำหนดไว้ด้านบน\r\n\r\n    //ยกเลิกการประมูล\r\n    function cancelAuction() external override onlyOwner onGoingAuction {\r\n        STATE = AuctionState.CANCELLED;\r\n        emit CancelledEvent(\"Auction has been cancelled\", block.timestamp); //เชื่อมต่อภายนอกกับภายใน smart contract โดยการส่ง event ไปยังภายนอก\r\n    }\r\n\r\n    //sheared functions\r\n\r\n    //ถอนเงิน\r\n    function withdraw() external override {\r\n        uint256 amount = 0;\r\n        address payable withdrawer = payable(msg.sender);\r\n        require(STATE != AuctionState.STARTED, \"Auction is still ongoing\");\r\n        if(withdrawer == owner) { // Owner can withdraw the highest bid\r\n            require(STATE == AuctionState.ENDED, \"Owner can only withdraw after auction ended\");\r\n            require(bids[highestBidder] > 0, \"No funds to withdraw for highest bidder\");\r\n            amount = highestBid;\r\n            bids[highestBidder] = 0; // Reset the highest bidder's bid\r\n        } else { // Other bidders can withdraw their bids\r\n            bool allowed = ((STATE == AuctionState.ENDED && withdrawer != highestBidder) ||\r\n                (STATE == AuctionState.CANCELLED)) &&\r\n                bids[withdrawer] > 0;\r\n            require(allowed, \"You are not allowed to withdraw\");\r\n            amount = bids[withdrawer];\r\n            bids[withdrawer] = 0;\r\n        }\r\n        (bool sent, ) = payable(withdrawer).call{value: amount}(\"\");\r\n        require(sent, \"Failed to send Ether\");\r\n        emit WithdrawnEvent(withdrawer, amount, block.timestamp);\r\n    }\r\n\r\n    //ดูรายละเอียดสินค้า ดูproduct  มี view\r\n    function getProductInfo()\r\n        external\r\n        view\r\n        override\r\n        returns (string memory, string memory)\r\n    {\r\n        return (product.Brand, product.SerialNumber);\r\n    }\r\n}\r\n"
+      }
+    }
+  }
+}
